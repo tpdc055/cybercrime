@@ -40,6 +40,26 @@ model User {
   savedSearches    SavedSearch[]
   searchAnalytics  SearchAnalytics[]
 
+  // ALEMS Relations
+  alemsThreatIntel     ThreatIntelligence[]
+  alemsFraudModels     FraudDetectionModel[]
+  alemsFraudRules      FraudDetectionRule[]
+  alemsFraudReviews    FraudDetection[]        @relation("FraudReviewedBy")
+  alemsAlerts          ALEMSAlert[]
+  alemsMessagesSent    InterAgencyMessage[]    @relation("MessageSentBy")
+  alemsRecipients      InterAgencyRecipient[]
+  alemsWorkflowTemplates WorkflowTemplate[]
+  alemsWorkflowExecutions WorkflowExecution[]
+  // ALEMS Relations
+  alemsThreatIntel     ThreatIntelligence[]
+  alemsFraudModels     FraudDetectionModel[]
+  alemsFraudRules      FraudDetectionRule[]
+  alemsFraudReviews    FraudDetection[]        @relation("FraudReviewedBy")
+  alemsAlerts          ALEMSAlert[]
+  alemsMessagesSent    InterAgencyMessage[]    @relation("MessageSentBy")
+  alemsRecipients      InterAgencyRecipient[]
+  alemsWorkflowTemplates WorkflowTemplate[]
+  alemsWorkflowExecutions WorkflowExecution[]
   @@map("users")
 }
 
@@ -118,6 +138,14 @@ model CyberCase {
   notifications         Notification[]
   caseUpdates           CaseUpdate[]
 
+  // ALEMS Relations
+  fraudDetections      FraudDetection[]
+  interAgencyMessages  InterAgencyMessage[]
+  workflowExecutions   WorkflowExecution[]
+  // ALEMS Relations
+  fraudDetections      FraudDetection[]
+  interAgencyMessages  InterAgencyMessage[]
+  workflowExecutions   WorkflowExecution[]
   @@map("cyber_cases")
 }
 
@@ -559,4 +587,704 @@ enum ArticleType {
   BEST_PRACTICE
   TRAINING_MATERIAL
   LEGAL_GUIDE
+}
+
+// ALEMS (Advanced Law Enforcement Management System) Models
+
+model ALEMSAlert {
+  id            String    @id @default(cuid())
+  alertType     AlertType
+  severity      AlertSeverity
+  title         String
+  description   String
+  metadata      Json?
+  source        String    // System that generated the alert
+  isRead        Boolean   @default(false)
+  isResolved    Boolean   @default(false)
+  assignedTo    String?
+  assignedUser  User?     @relation(fields: [assignedTo], references: [id])
+  relatedCases  String[]  // Array of case IDs
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  resolvedAt    DateTime?
+
+  @@map("alems_alerts")
+}
+
+model ThreatIntelligence {
+  id            String           @id @default(cuid())
+  threat_type   ThreatType
+  severity      AlertSeverity
+  title         String
+  description   String
+  indicators    Json             // IOCs, IPs, domains, etc.
+  sources       String[]         // Data sources
+  confidence    Float            // 0.0 to 1.0
+  isActive      Boolean          @default(true)
+  tags          String[]
+  relatedCases  String[]
+  createdBy     String
+  creator       User             @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  expiresAt     DateTime?
+
+  @@map("threat_intelligence")
+}
+
+model FraudDetectionModel {
+  id                String              @id @default(cuid())
+  name              String
+  modelType         MLModelType
+  description       String
+  version           String
+  isActive          Boolean             @default(true)
+  accuracy          Float?              // Model accuracy score
+  lastTrainingDate  DateTime?
+  features          Json                // Feature configuration
+  parameters        Json                // Model parameters
+  detectionRules    FraudDetectionRule[]
+  predictions       FraudPrediction[]
+  createdBy         String
+  creator           User                @relation(fields: [createdBy], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@map("fraud_detection_models")
+}
+
+model FraudDetectionRule {
+  id            String                @id @default(cuid())
+  name          String
+  description   String
+  ruleType      FraudRuleType
+  conditions    Json                  // Rule conditions
+  actions       Json                  // Actions to take
+  isActive      Boolean               @default(true)
+  priority      Int                   @default(1)
+  modelId       String?
+  model         FraudDetectionModel?  @relation(fields: [modelId], references: [id])
+  detections    FraudDetection[]
+  createdBy     String
+  creator       User                  @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@map("fraud_detection_rules")
+}
+
+model FraudDetection {
+  id              String               @id @default(cuid())
+  riskScore       Float                // 0.0 to 1.0
+  detectionType   FraudDetectionType
+  description     String
+  evidence        Json                 // Supporting evidence
+  status          FraudDetectionStatus
+  isVerified      Boolean              @default(false)
+  falsePositive   Boolean              @default(false)
+  ruleId          String?
+  rule            FraudDetectionRule?  @relation(fields: [ruleId], references: [id])
+  predictions     FraudPrediction[]
+  caseId          String?
+  case            CyberCase?           @relation(fields: [caseId], references: [id])
+  reviewedBy      String?
+  reviewer        User?                @relation("FraudReviewedBy", fields: [reviewedBy], references: [id])
+  detectedAt      DateTime             @default(now())
+  reviewedAt      DateTime?
+
+  @@map("fraud_detections")
+}
+
+model FraudPrediction {
+  id              String              @id @default(cuid())
+  predictionType  PredictionType
+  confidence      Float               // 0.0 to 1.0
+  prediction      Json                // Prediction details
+  input_features  Json                // Input data used
+  modelId         String
+  model           FraudDetectionModel @relation(fields: [modelId], references: [id])
+  detectionId     String?
+  detection       FraudDetection?     @relation(fields: [detectionId], references: [id])
+  createdAt       DateTime            @default(now())
+
+  @@map("fraud_predictions")
+}
+
+model InterAgencyMessage {
+  id            String                    @id @default(cuid())
+  fromAgency    String
+  toAgency      String
+  subject       String
+  content       String
+  messageType   InterAgencyMessageType
+  priority      MessagePriority
+  isEncrypted   Boolean                   @default(true)
+  attachments   String[]                  // File paths/URLs
+  status        MessageStatus
+  threadId      String?                   // For message threads
+  parentId      String?                   // For replies
+  parent        InterAgencyMessage?       @relation("MessageThread", fields: [parentId], references: [id])
+  replies       InterAgencyMessage[]      @relation("MessageThread")
+  sentBy        String
+  sender        User                      @relation("MessageSentBy", fields: [sentBy], references: [id])
+  recipients    InterAgencyRecipient[]
+  caseId        String?
+  case          CyberCase?                @relation(fields: [caseId], references: [id])
+  sentAt        DateTime                  @default(now())
+  readAt        DateTime?
+  archivedAt    DateTime?
+
+  @@map("inter_agency_messages")
+}
+
+model InterAgencyRecipient {
+  id          String               @id @default(cuid())
+  messageId   String
+  message     InterAgencyMessage   @relation(fields: [messageId], references: [id])
+  recipientId String?
+  recipient   User?                @relation(fields: [recipientId], references: [id])
+  agency      String
+  readAt      DateTime?
+  deliveredAt DateTime?
+
+  @@map("inter_agency_recipients")
+}
+
+model WorkflowTemplate {
+  id          String            @id @default(cuid())
+  name        String
+  description String
+  category    WorkflowCategory
+  steps       Json              // Workflow steps configuration
+  triggers    Json              // Trigger conditions
+  isActive    Boolean           @default(true)
+  version     String            @default("1.0")
+  executions  WorkflowExecution[]
+  createdBy   String
+  creator     User              @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("workflow_templates")
+}
+
+model WorkflowExecution {
+  id             String                   @id @default(cuid())
+  templateId     String
+  template       WorkflowTemplate         @relation(fields: [templateId], references: [id])
+  status         WorkflowExecutionStatus
+  currentStep    Int                      @default(0)
+  context        Json                     // Execution context
+  results        Json?                    // Execution results
+  errorLog       String?
+  triggeredBy    String?
+  trigger_user   User?                    @relation(fields: [triggeredBy], references: [id])
+  caseId         String?
+  case           CyberCase?               @relation(fields: [caseId], references: [id])
+  steps          WorkflowStep[]
+  startedAt      DateTime                 @default(now())
+  completedAt    DateTime?
+  failedAt       DateTime?
+
+  @@map("workflow_executions")
+}
+
+model WorkflowStep {
+  id            String            @id @default(cuid())
+  executionId   String
+  execution     WorkflowExecution @relation(fields: [executionId], references: [id])
+  stepNumber    Int
+  stepName      String
+  stepType      WorkflowStepType
+  configuration Json
+  status        WorkflowStepStatus
+  input         Json?
+  output        Json?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  retryCount    Int               @default(0)
+
+  @@map("workflow_steps")
+}
+
+// New Enums for ALEMS
+enum AlertType {
+  SECURITY_BREACH
+  FRAUD_DETECTED
+  SYSTEM_ANOMALY
+  THREAT_INTELLIGENCE
+  COMPLIANCE_VIOLATION
+  WORKFLOW_FAILURE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ThreatType {
+  MALWARE
+  PHISHING
+  RANSOMWARE
+  APT
+  INSIDER_THREAT
+  SOCIAL_ENGINEERING
+  DATA_BREACH
+  FINANCIAL_FRAUD
+}
+
+enum MLModelType {
+  CLASSIFICATION
+  REGRESSION
+  CLUSTERING
+  ANOMALY_DETECTION
+  NEURAL_NETWORK
+  ENSEMBLE
+}
+
+enum FraudRuleType {
+  TRANSACTION_PATTERN
+  BEHAVIORAL_ANALYSIS
+  NETWORK_ANALYSIS
+  TEMPORAL_ANALYSIS
+  STATISTICAL_THRESHOLD
+}
+
+enum FraudDetectionType {
+  PAYMENT_FRAUD
+  IDENTITY_THEFT
+  ACCOUNT_TAKEOVER
+  SYNTHETIC_IDENTITY
+  MONEY_LAUNDERING
+  INVESTMENT_FRAUD
+}
+
+enum FraudDetectionStatus {
+  DETECTED
+  UNDER_REVIEW
+  CONFIRMED
+  FALSE_POSITIVE
+  RESOLVED
+}
+
+enum PredictionType {
+  FRAUD_PROBABILITY
+  RISK_SCORE
+  BEHAVIOR_CLASSIFICATION
+  ANOMALY_SCORE
+}
+
+enum InterAgencyMessageType {
+  INFORMATION_SHARING
+  REQUEST_ASSISTANCE
+  CASE_REFERRAL
+  ALERT_NOTIFICATION
+  COORDINATION
+  ADMINISTRATIVE
+}
+
+enum MessagePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MessageStatus {
+  DRAFT
+  SENT
+  DELIVERED
+  READ
+  ARCHIVED
+}
+
+enum WorkflowCategory {
+  CASE_MANAGEMENT
+  EVIDENCE_PROCESSING
+  COMPLIANCE
+  THREAT_RESPONSE
+  INVESTIGATION
+  REPORTING
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PAUSED
+}
+
+enum WorkflowStepType {
+  ACTION
+  CONDITION
+  LOOP
+  PARALLEL
+  DECISION
+  NOTIFICATION
+  DATA_PROCESSING
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+EOF  
+cd /home/project && cd cybercrime-repo && cat >> prisma/schema.prisma << 'EOF'
+
+// ALEMS (Advanced Law Enforcement Management System) Models
+
+model ALEMSAlert {
+  id            String    @id @default(cuid())
+  alertType     AlertType
+  severity      AlertSeverity
+  title         String
+  description   String
+  metadata      Json?
+  source        String    // System that generated the alert
+  isRead        Boolean   @default(false)
+  isResolved    Boolean   @default(false)
+  assignedTo    String?
+  assignedUser  User?     @relation(fields: [assignedTo], references: [id])
+  relatedCases  String[]  // Array of case IDs
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  resolvedAt    DateTime?
+
+  @@map("alems_alerts")
+}
+
+model ThreatIntelligence {
+  id            String           @id @default(cuid())
+  threat_type   ThreatType
+  severity      AlertSeverity
+  title         String
+  description   String
+  indicators    Json             // IOCs, IPs, domains, etc.
+  sources       String[]         // Data sources
+  confidence    Float            // 0.0 to 1.0
+  isActive      Boolean          @default(true)
+  tags          String[]
+  relatedCases  String[]
+  createdBy     String
+  creator       User             @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  expiresAt     DateTime?
+
+  @@map("threat_intelligence")
+}
+
+model FraudDetectionModel {
+  id                String              @id @default(cuid())
+  name              String
+  modelType         MLModelType
+  description       String
+  version           String
+  isActive          Boolean             @default(true)
+  accuracy          Float?              // Model accuracy score
+  lastTrainingDate  DateTime?
+  features          Json                // Feature configuration
+  parameters        Json                // Model parameters
+  detectionRules    FraudDetectionRule[]
+  predictions       FraudPrediction[]
+  createdBy         String
+  creator           User                @relation(fields: [createdBy], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@map("fraud_detection_models")
+}
+
+model FraudDetectionRule {
+  id            String                @id @default(cuid())
+  name          String
+  description   String
+  ruleType      FraudRuleType
+  conditions    Json                  // Rule conditions
+  actions       Json                  // Actions to take
+  isActive      Boolean               @default(true)
+  priority      Int                   @default(1)
+  modelId       String?
+  model         FraudDetectionModel?  @relation(fields: [modelId], references: [id])
+  detections    FraudDetection[]
+  createdBy     String
+  creator       User                  @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@map("fraud_detection_rules")
+}
+
+model FraudDetection {
+  id              String               @id @default(cuid())
+  riskScore       Float                // 0.0 to 1.0
+  detectionType   FraudDetectionType
+  description     String
+  evidence        Json                 // Supporting evidence
+  status          FraudDetectionStatus
+  isVerified      Boolean              @default(false)
+  falsePositive   Boolean              @default(false)
+  ruleId          String?
+  rule            FraudDetectionRule?  @relation(fields: [ruleId], references: [id])
+  predictions     FraudPrediction[]
+  caseId          String?
+  case            CyberCase?           @relation(fields: [caseId], references: [id])
+  reviewedBy      String?
+  reviewer        User?                @relation("FraudReviewedBy", fields: [reviewedBy], references: [id])
+  detectedAt      DateTime             @default(now())
+  reviewedAt      DateTime?
+
+  @@map("fraud_detections")
+}
+
+model FraudPrediction {
+  id              String              @id @default(cuid())
+  predictionType  PredictionType
+  confidence      Float               // 0.0 to 1.0
+  prediction      Json                // Prediction details
+  input_features  Json                // Input data used
+  modelId         String
+  model           FraudDetectionModel @relation(fields: [modelId], references: [id])
+  detectionId     String?
+  detection       FraudDetection?     @relation(fields: [detectionId], references: [id])
+  createdAt       DateTime            @default(now())
+
+  @@map("fraud_predictions")
+}
+
+model InterAgencyMessage {
+  id            String                    @id @default(cuid())
+  fromAgency    String
+  toAgency      String
+  subject       String
+  content       String
+  messageType   InterAgencyMessageType
+  priority      MessagePriority
+  isEncrypted   Boolean                   @default(true)
+  attachments   String[]                  // File paths/URLs
+  status        MessageStatus
+  threadId      String?                   // For message threads
+  parentId      String?                   // For replies
+  parent        InterAgencyMessage?       @relation("MessageThread", fields: [parentId], references: [id])
+  replies       InterAgencyMessage[]      @relation("MessageThread")
+  sentBy        String
+  sender        User                      @relation("MessageSentBy", fields: [sentBy], references: [id])
+  recipients    InterAgencyRecipient[]
+  caseId        String?
+  case          CyberCase?                @relation(fields: [caseId], references: [id])
+  sentAt        DateTime                  @default(now())
+  readAt        DateTime?
+  archivedAt    DateTime?
+
+  @@map("inter_agency_messages")
+}
+
+model InterAgencyRecipient {
+  id          String               @id @default(cuid())
+  messageId   String
+  message     InterAgencyMessage   @relation(fields: [messageId], references: [id])
+  recipientId String?
+  recipient   User?                @relation(fields: [recipientId], references: [id])
+  agency      String
+  readAt      DateTime?
+  deliveredAt DateTime?
+
+  @@map("inter_agency_recipients")
+}
+
+model WorkflowTemplate {
+  id          String            @id @default(cuid())
+  name        String
+  description String
+  category    WorkflowCategory
+  steps       Json              // Workflow steps configuration
+  triggers    Json              // Trigger conditions
+  isActive    Boolean           @default(true)
+  version     String            @default("1.0")
+  executions  WorkflowExecution[]
+  createdBy   String
+  creator     User              @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("workflow_templates")
+}
+
+model WorkflowExecution {
+  id             String                   @id @default(cuid())
+  templateId     String
+  template       WorkflowTemplate         @relation(fields: [templateId], references: [id])
+  status         WorkflowExecutionStatus
+  currentStep    Int                      @default(0)
+  context        Json                     // Execution context
+  results        Json?                    // Execution results
+  errorLog       String?
+  triggeredBy    String?
+  trigger_user   User?                    @relation(fields: [triggeredBy], references: [id])
+  caseId         String?
+  case           CyberCase?               @relation(fields: [caseId], references: [id])
+  steps          WorkflowStep[]
+  startedAt      DateTime                 @default(now())
+  completedAt    DateTime?
+  failedAt       DateTime?
+
+  @@map("workflow_executions")
+}
+
+model WorkflowStep {
+  id            String            @id @default(cuid())
+  executionId   String
+  execution     WorkflowExecution @relation(fields: [executionId], references: [id])
+  stepNumber    Int
+  stepName      String
+  stepType      WorkflowStepType
+  configuration Json
+  status        WorkflowStepStatus
+  input         Json?
+  output        Json?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  retryCount    Int               @default(0)
+
+  @@map("workflow_steps")
+}
+
+// New Enums for ALEMS
+enum AlertType {
+  SECURITY_BREACH
+  FRAUD_DETECTED
+  SYSTEM_ANOMALY
+  THREAT_INTELLIGENCE
+  COMPLIANCE_VIOLATION
+  WORKFLOW_FAILURE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ThreatType {
+  MALWARE
+  PHISHING
+  RANSOMWARE
+  APT
+  INSIDER_THREAT
+  SOCIAL_ENGINEERING
+  DATA_BREACH
+  FINANCIAL_FRAUD
+}
+
+enum MLModelType {
+  CLASSIFICATION
+  REGRESSION
+  CLUSTERING
+  ANOMALY_DETECTION
+  NEURAL_NETWORK
+  ENSEMBLE
+}
+
+enum FraudRuleType {
+  TRANSACTION_PATTERN
+  BEHAVIORAL_ANALYSIS
+  NETWORK_ANALYSIS
+  TEMPORAL_ANALYSIS
+  STATISTICAL_THRESHOLD
+}
+
+enum FraudDetectionType {
+  PAYMENT_FRAUD
+  IDENTITY_THEFT
+  ACCOUNT_TAKEOVER
+  SYNTHETIC_IDENTITY
+  MONEY_LAUNDERING
+  INVESTMENT_FRAUD
+}
+
+enum FraudDetectionStatus {
+  DETECTED
+  UNDER_REVIEW
+  CONFIRMED
+  FALSE_POSITIVE
+  RESOLVED
+}
+
+enum PredictionType {
+  FRAUD_PROBABILITY
+  RISK_SCORE
+  BEHAVIOR_CLASSIFICATION
+  ANOMALY_SCORE
+}
+
+enum InterAgencyMessageType {
+  INFORMATION_SHARING
+  REQUEST_ASSISTANCE
+  CASE_REFERRAL
+  ALERT_NOTIFICATION
+  COORDINATION
+  ADMINISTRATIVE
+}
+
+enum MessagePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MessageStatus {
+  DRAFT
+  SENT
+  DELIVERED
+  READ
+  ARCHIVED
+}
+
+enum WorkflowCategory {
+  CASE_MANAGEMENT
+  EVIDENCE_PROCESSING
+  COMPLIANCE
+  THREAT_RESPONSE
+  INVESTIGATION
+  REPORTING
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PAUSED
+}
+
+enum WorkflowStepType {
+  ACTION
+  CONDITION
+  LOOP
+  PARALLEL
+  DECISION
+  NOTIFICATION
+  DATA_PROCESSING
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  CANCELLED
 }

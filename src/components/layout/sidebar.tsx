@@ -134,6 +134,46 @@ const navigationItems: NavigationSection[] = [
         href: "/analytics",
         icon: BarChart3,
       },
+  },
+  {
+    title: "ALEMS Features",
+    items: [
+      {
+        title: "ALEMS Command Center",
+        href: "/alems-command",
+        icon: Shield,
+      },
+      {
+        title: "AI Fraud Detection",
+        href: "/ai-fraud-detection",
+        icon: AlertTriangle,
+      },
+      {
+        title: "Inter-Agency Hub",
+        href: "/inter-agency",
+        icon: Users,
+      },
+    ],
+  },
+  {
+    title: "ALEMS Features",
+    items: [
+      {
+        title: "ALEMS Command Center",
+        href: "/alems-command",
+        icon: Shield,
+      },
+      {
+        title: "AI Fraud Detection",
+        href: "/ai-fraud-detection",
+        icon: AlertTriangle,
+      },
+      {
+        title: "Inter-Agency Hub",
+        href: "/inter-agency",
+        icon: Users,
+      },
+    ],
       {
         title: "Reports",
         href: "/reports",
